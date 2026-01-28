@@ -93,14 +93,14 @@ async def init_db():
                 (make, model)
             )
 
-        # Set default settings
+        # Set default settings (Houston, TX area with 200 mile radius)
         await db.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
-            ("zip_code", "90210")
+            ("zip_code", "77001")
         )
         await db.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
-            ("search_radius", "100")
+            ("search_radius", "200")
         )
 
         await db.commit()
