@@ -71,19 +71,48 @@ class CarsComScraper(BaseScraper):
             # Scroll to load more listings
             await self.scroll_page(2)
 
-            # Find vehicle cards
-            listings = await self.page.query_selector_all(".vehicle-card")
-            print(f"[Cars.com] Found {len(listings)} listings for {make} {model}")
+            # Find vehicle detail links and get their parent containers
+            links = await self.page.query_selector_all('a[href*="/vehicledetail/"]')
+            print(f"[Cars.com] Found {len(links)} vehicle links for {make} {model}")
 
+            seen_ids = set()
             count = 0
-            for listing in listings[:30]:  # Limit to 30 per scrape
+
+            for link in links[:60]:  # Check more links, filter dupes
                 try:
-                    listing_data = await self._parse_listing(listing, make, model)
+                    href = await link.get_attribute("href")
+                    if not href:
+                        continue
+
+                    # Extract listing ID from URL
+                    id_match = re.search(r'/vehicledetail/([^/]+)/', href)
+                    if not id_match:
+                        continue
+
+                    external_id = id_match.group(1)
+                    if external_id in seen_ids:
+                        continue
+                    seen_ids.add(external_id)
+
+                    # Get the parent container with listing info
+                    # Go up several levels to find the card container
+                    parent = await link.evaluate_handle("el => el.closest('div[class*=\"vehicle\"], div[class*=\"listing\"], section, article') || el.parentElement.parentElement.parentElement")
+
+                    if not parent:
+                        continue
+
+                    text_content = await parent.evaluate("el => el.innerText")
+                    if not text_content or len(text_content) < 20:
+                        continue
+
+                    listing_data = self._parse_listing_text(text_content, external_id, href, make)
                     if listing_data and listing_data.price > 5000:
                         count += 1
                         yield listing_data
+                        if count >= 30:
+                            break
+
                 except Exception as e:
-                    print(f"[Cars.com] Error parsing listing: {e}")
                     continue
 
             print(f"[Cars.com] Scraped {count} valid listings for {make} {model}")
@@ -91,49 +120,31 @@ class CarsComScraper(BaseScraper):
         except Exception as e:
             print(f"[Cars.com] Error scraping {make} {model}: {e}")
 
-    async def _parse_listing(self, listing, make: str, model: str) -> ListingData:
-        """Parse a single listing element."""
-        try:
-            text_content = await listing.inner_text()
-        except:
-            return None
-
-        if len(text_content) < 20:
-            return None
-
-        # Get listing ID
-        external_id = await listing.get_attribute("data-listing-id")
-        if not external_id:
-            external_id = await listing.get_attribute("id")
-        if not external_id:
-            external_id = f"cc-{abs(hash(text_content)) % 100000}"
-
+    def _parse_listing_text(self, text: str, external_id: str, href: str, make: str) -> ListingData:
+        """Parse listing data from text content."""
         # Extract price
-        price_match = re.search(r'\$[\d,]+', text_content)
+        price_match = re.search(r'\$[\d,]+', text)
         price = self.parse_price(price_match.group()) if price_match else 0
 
         if price == 0 or price > 500000:
             return None
 
         # Extract year
-        year = self.parse_year(text_content)
+        year = self.parse_year(text)
 
-        # Verify it's the right make/model
-        text_lower = text_content.lower()
-        if make.lower() not in text_lower:
+        # Verify it's the right make
+        if make.lower() not in text.lower():
             return None
 
         # Extract mileage
-        mileage_match = re.search(r'([\d,]+)\s*mi', text_content, re.IGNORECASE)
+        mileage_match = re.search(r'([\d,]+)\s*mi', text, re.IGNORECASE)
         mileage = self.parse_mileage(mileage_match.group(1)) if mileage_match else None
 
-        # Get URL
-        link_el = await listing.query_selector('a[href*="/vehicledetail/"]')
-        href = await link_el.get_attribute("href") if link_el else ""
-        url = f"{self.BASE_URL}{href}" if href and not href.startswith("http") else href
+        # Build URL
+        url = f"{self.BASE_URL}{href}" if not href.startswith("http") else href
 
         # Extract location
-        location_match = re.search(r'([A-Z][a-z]+(?:\s[A-Z][a-z]+)*,\s*[A-Z]{2})', text_content)
+        location_match = re.search(r'([A-Z][a-z]+(?:\s[A-Z][a-z]+)*,\s*[A-Z]{2})', text)
         location = location_match.group(1) if location_match else None
 
         return ListingData(
