@@ -20,6 +20,7 @@ class CarsComScraper(BaseScraper):
         "BMW": "bmw",
         "Mercedes": "mercedes_benz",
         "Volkswagen": "volkswagen",
+        "Polestar": "polestar",
     }
 
     MODEL_SLUGS = {
@@ -43,6 +44,9 @@ class CarsComScraper(BaseScraper):
         ("Mercedes", "EQS"): "mercedes_benz-eqs",
         ("Mercedes", "EQE"): "mercedes_benz-eqe",
         ("Volkswagen", "ID.4"): "volkswagen-id_4",
+        ("Polestar", "2"): "polestar-2",
+        ("Polestar", "3"): "polestar-3",
+        ("Polestar", "4"): "polestar-4",
     }
 
     def build_search_url(self, make: str, model: str) -> str:

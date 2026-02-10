@@ -27,6 +27,9 @@ EV_MODELS = [
     ("Mercedes", "EQS"),
     ("Mercedes", "EQE"),
     ("Volkswagen", "ID.4"),
+    ("Polestar", "2"),
+    ("Polestar", "3"),
+    ("Polestar", "4"),
 ]
 
 
